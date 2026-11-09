@@ -1,8 +1,8 @@
 ---
 title: browser-use
 created: 2026-11-08T05:41:27Z
-modified: 2026-11-08T05:41:27Z
-version: 2.0.0
+modified: 2026-11-09T06:02:25Z
+version: 2.1.0
 description: What browser-use is and how to start, for a reader arriving cold.
 level: L1
 status: unverified

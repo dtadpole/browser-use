@@ -593,6 +593,33 @@ export async function verifyProxyRoute(running, options, proxy, { probe = probeR
   return result
 }
 
+/**
+ * Before `open` on a running proxied browser whose profile declares a check: probe the route again. A browser that
+ * has since gone around the proxy is stopped, so the open starts a fresh one whose start verifies the route
+ * (measured 2026-11-09: a profile up for ten hours answered 403 from the origin's own address while the PAC and both
+ * forwards were fine; clearing Chrome's bad proxies did not help, a restart did). A check page that fails to load
+ * (the proxy itself down) only warns: a fresh browser could not do better. Returns `{ restarted, why }` or undefined
+ * when the route is right or there is nothing to check.
+ */
+export async function rerouteIfDirect(options, { statusOf, stop, probe = probeRoute }) {
+  const url = options.proxyCheckUrl
+  const via = options.proxyCheckVia
+  if (!url || !via) return undefined
+  const live = await statusOf(options)
+  if (!live?.running || !live.health?.wsUrl) return undefined
+  let result
+  try {
+    result = await probe({ wsUrl: live.health.wsUrl }, url)
+  } catch (error) {
+    result = { error: error instanceof Error ? error.message : String(error) }
+  }
+  const why = judgeRoute(result, via)
+  if (why === undefined) return undefined
+  if (result?.error) return { restarted: false, why }
+  await stop(options)
+  return { restarted: true, why }
+}
+
 /** Lists the enabled extensions with the proxy permission and changes nothing (the `proxy-check` command). */
 export const PROXY_CONTROLLER_LIST_SCRIPT = `(async () => {
   const left = (await chrome.management.getAll()).filter((e) => e.enabled && (e.permissions || []).includes('proxy'))
