@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs'
 
-import { browserPath, defaultProfilePath, proxyArgs, proxyCheckReport, stateDir } from './chrome.mjs'
+import { browserPath, defaultProfilePath, proxyArgs, proxyCheckReport, rerouteIfDirect, stateDir } from './chrome.mjs'
 import { callTool, liveHost, proxyMismatch, startHostProcess, status, stopHost } from './client.mjs'
 import { openUrl, profileCommand, profileOptions, profileRunning } from './profile-cli.mjs'
 import { selectProfile } from './profiles.mjs'
@@ -55,7 +55,8 @@ commands:
   stop     close the browser and forget the session
   status   report whether a browser is running, and on which endpoint
   tools    list the tools this implementation offers
-  open     a new page at a URL, or at a path under the profile's home (its proxy_check URL); starts the browser
+  open     a new page at a URL, or at a path under the profile's home (its proxy_check URL); starts the browser,
+           and restarts one whose route check now goes around the proxy
   proxy-check  the running browser's proxy-controlling extensions and the real route of the check URL; exit 1 on a
            problem; --fix disables those extensions in this profile
 
@@ -283,6 +284,8 @@ async function main(argv) {
   if (command === 'open') {
     const chosen = profileOptions(selection, {}, process.env, notify)
     const url = openUrl(rest.find((arg) => !arg.startsWith('--')), chosen.proxyCheckUrl)
+    const rerouted = await rerouteIfDirect(chosen, { statusOf: status, stop: stopHost })
+    if (rerouted) process.stderr.write(`open: ${rerouted.why}${rerouted.restarted ? '; restarted the browser' : ''}\n`)
     printResult(await callTool('new_page', { url }, chosen), { json: rest.includes('--json') })
     return 0
   }

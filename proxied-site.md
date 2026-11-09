@@ -32,6 +32,8 @@ node cli.mjs --profile=site proxy-check            # exit 1 names the problem; -
 2. It loads the `proxy_check` URL and requires Chrome's reported remote address to be the named proxy (loopback
    names count as one). A start that would go direct stops its browser and says what answered; `start` prints the
    route it saw.
+   `open` checks the route again on a browser that is already running and restarts one that now goes around
+   the proxy: a long-running Chrome can fall back to DIRECT and stay there while the PAC and the proxy are fine.
 
 **Diagnosis.** `proxy-check` lists the enabled proxy-controlling extensions and probes the route.
 

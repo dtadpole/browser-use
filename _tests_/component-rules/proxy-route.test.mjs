@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 
 import { closeTargetSurely, formatRemote, judgeRoute, probeRoute, proxyCheckReport, proxyControllerScript, PROXY_CONTROLLER_LIST_SCRIPT,
-  verifyProxyRoute } from '../../chrome.mjs'
+  rerouteIfDirect, verifyProxyRoute } from '../../chrome.mjs'
 import { daemonArgs } from '../../client.mjs'
 import { openUrl, profileOptions } from '../../profile-cli.mjs'
 import { checkProxyCheck, createProfile, listLine, parseCreate, readProfile, setProfile, startSettings } from '../../profiles.mjs'
@@ -286,4 +286,44 @@ test('open: a URL as given, a path under the profile home, and a clear refusal w
   assert.equal(openUrl('/reflection/reflection/pull/5498', 'https://git.example.com'),
     'https://git.example.com/reflection/reflection/pull/5498')
   assert.throws(() => openUrl('reflection', undefined), /open needs a URL, or a profile with a home/)
+})
+
+/**
+ * `open` re-checks a running proxied browser's route (2026-11-09: a browser up for ten hours had fallen back to
+ * DIRECT and every page answered 403; only a restart recovered it).
+ */
+test('open restarts a running browser whose route now goes around the proxy', async () => {
+  const opts = { proxyCheckUrl: GHE, proxyCheckVia: VIA }
+  const running = { running: true, health: { wsUrl: 'ws://127.0.0.1:1/devtools/browser/x' } }
+  const calls = []
+  const stop = async () => { calls.push('stop') }
+  const direct = await rerouteIfDirect(opts, { statusOf: async () => running, stop,
+    probe: async () => ({ url: GHE, status: 403, remote: '192.0.2.10:443', server: 'awselb/2.0' }) })
+  assert.equal(direct.restarted, true)
+  assert.match(direct.why, /went around the proxy/)
+  assert.deepEqual(calls, ['stop'])
+})
+
+test('open leaves a browser alone when its route is right, nothing runs, or nothing is declared', async () => {
+  const opts = { proxyCheckUrl: GHE, proxyCheckVia: VIA }
+  const running = { running: true, health: { wsUrl: 'ws://127.0.0.1:1/devtools/browser/x' } }
+  let stopped = 0
+  let probed = 0
+  const stop = async () => { stopped += 1 }
+  const probe = async () => { probed += 1; return { url: GHE, status: 200, remote: '127.0.0.1:18080' } }
+  assert.equal(await rerouteIfDirect(opts, { statusOf: async () => running, stop, probe }), undefined)
+  assert.equal(await rerouteIfDirect(opts, { statusOf: async () => ({ running: false }), stop, probe }), undefined)
+  assert.equal(await rerouteIfDirect({}, { statusOf: async () => running, stop, probe }), undefined)
+  assert.deepEqual([stopped, probed], [0, 1], 'only the running, declared profile is probed; none is stopped')
+})
+
+test('a check page that fails to load only warns: a fresh browser could not do better', async () => {
+  const opts = { proxyCheckUrl: GHE, proxyCheckVia: VIA }
+  const running = { running: true, health: { wsUrl: 'ws://127.0.0.1:1/devtools/browser/x' } }
+  let stopped = 0
+  const out = await rerouteIfDirect(opts, { statusOf: async () => running, stop: async () => { stopped += 1 },
+    probe: async () => { throw new Error('net::ERR_PROXY_CONNECTION_FAILED') } })
+  assert.equal(out.restarted, false)
+  assert.match(out.why, /is the proxy 127.0.0.1:18080 up/)
+  assert.equal(stopped, 0)
 })

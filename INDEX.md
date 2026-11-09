@@ -1,8 +1,8 @@
 ---
 title: Browser Use
 created: 2026-10-29T00:33:22Z
-modified: 2026-11-08T05:41:27Z
-version: 2.0.0
+modified: 2026-11-09T06:02:25Z
+version: 2.1.0
 description: A dependency-free browser an agent or a check drives over the Chrome DevTools protocol, with the harness browser's tool surface and one long-lived session behind its command line.
 grounded_in:
   - source: owner request 2026-11-08, moving browser-use out of reflection into its own public repository github.com/dtadpole/browser-use
